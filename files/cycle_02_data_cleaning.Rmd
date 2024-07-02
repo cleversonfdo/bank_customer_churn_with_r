@@ -1,0 +1,297 @@
+---
+title: "Data Cleaning - Cycle 02"
+author: "Cleverson Oliveira"
+date: "`r format(Sys.time(), '%d/%m/%Y')`"
+output:
+  html_document:
+    highlight: textmate
+    logo: logo.png
+    theme: jou
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: no
+    df_print: paged
+    code_folding: hide
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Imports
+
+```{r imports}
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(gtsummary)
+library(kableExtra)
+library(summarytools)
+library(gridExtra)
+```
+
+# Data Collection
+
+```{r collection, echo=FALSE}
+library(readr)
+df2 <- read_csv("dataset/customer_churn_records.csv")
+View(df2)
+glimpse(df2)
+```
+
+# Column Description
+
+```{r, echo=FALSE}
+variables <- df2 %>% names()
+description <- c(
+  "Corresponds to the record (row) number",
+  "Unique ID for the customer",
+  "The surname of a customer ",
+  "The credit score of the customer",
+  "Customer’s location",
+  "Customer's gender",
+  "Customer's age",
+  "Number of years that the customer has been a client ",
+  "Customer's balance",
+  "Number of products that a customer has purchased",
+  "Denotes whether or not a customer has a credit card",
+  "Denotes if the customer is active or not",
+  "Customer's salary",
+  "Whether or not the customer left the bank",
+  "Customer has complaint or not",
+  "Score provided by the customer for their complaint resolution",
+  "Type of card hold by the customer",
+  "The points earned by the customer for using credit card"
+)
+
+df_description <- tibble(variables = variables,
+                  description = description)
+
+kable(df_description, format = "html") %>% 
+kableExtra::kable_styling(bootstrap_options = "striped", full_width = FALSE)
+```
+
+# Data Cleaning
+
+```{r data cleaning}
+df2 %>% names()
+
+df2 <-  janitor::clean_names(df2, case = "snake") %>% # change the font
+        #Use across() with mutate() to apply a transformation  to multiple columns in a tibble
+        mutate(
+                        #columns          , function
+                across(where(is.character), tolower),
+                
+                has_cr_card = ifelse(has_cr_card==1, "yes", "no"),
+                
+                is_active_member = ifelse(is_active_member==1, "yes", "no"),
+                
+                exited = ifelse(exited==1, "yes", "no"),
+                
+                complain = ifelse(complain==1, "yes", "no"),
+                
+              ) %>% 
+                              # categorical data
+        mutate_if(is.character, as.factor) 
+# checking the levels
+table(df2$response)
+table(df2$previously_insured)
+  
+        # Make sure yes is the first level of factor response
+df2 <- df2 %>%  mutate( has_cr_card = factor(has_cr_card, levels=c("yes", "no")),
+                        is_active_member = factor(is_active_member, levels=c("yes", "no")),
+                        exited = factor(exited, levels=c("yes", "no")),
+                        complain = factor(complain, levels=c("yes", "no"))
+              )
+# checking the change of levels
+table(df2$response)
+table(df2$previously_insured)
+
+df2 %>% names()
+
+glimpse(df2)
+
+saveRDS(df2, "files/df2.rds")
+```
+
+## Data Types
+
+```{r}
+str(df2)
+
+lapply(df2, class) # give a list with classes of df1
+unlist(lapply(df2, class))
+
+      # column     values
+tibble(variables = names(df2), 
+       type      = unlist(lapply(df2, class)))
+```
+
+## Descriptive Statistics
+
+### Data Structure
+
+```{r}
+skim(df2, -row_number, -customer_id, -surname) # excluding identification columns
+```
+
+### General Overview
+
+```{r}
+# checking categorical levels
+df2 %>% 
+  select(-customer_id, -row_number, -surname) %>% 
+  tbl_summary(# saying that a column is categorical forces the rstudio to show all categories
+    
+    type = list(has_cr_card ~ "categorical",
+                is_active_member ~ "categorical",
+                exited ~ "categorical",
+                complain ~ "categorical"),
+    
+    digits = list(all_categorical() ~ c(0, 2), # decimal places for numbers (0) and percentage (2)
+                  all_continuous()  ~ c(1, 2)), 
+    
+    statistic = list(all_categorical() ~ "{n} ({p}%)", # numbers and percentage
+                     all_continuous()  ~ "{median} ({p25}, {p75})"), 
+    
+    include = everything()
+  )
+```
+
+### Numerical Statistics
+
+```{r, echo=FALSE}
+num_attributes <- df2 %>% 
+                  select(credit_score, age, tenure, balance, estimated_salary, satisfaction_score, point_earned)
+
+desciptive_tab <- descr(num_attributes, style="rmarkdown") %>%  
+                  round(2)
+
+kable(data.frame(desciptive_tab), format="html") %>% 
+      kableExtra::kable_styling(bootstrap_options = "striped", full_width=FALSE)
+```
+
+## Visualization
+
+### Numerical Attributes
+
+```{r, echo=FALSE}
+credit_score_plt <- num_attributes %>% 
+                    ggplot(aes(x=credit_score)) + 
+                    geom_histogram(aes(y=after_stat(density)), binwidth=5, color="gray", fill="lightblue", alpha=0.5) + 
+                    geom_density(color="blue") +
+                    labs(x="Credit Score", y="Density", title="Credit Score Distribution") + 
+                    theme_minimal()
+```
+
+```{r, echo=FALSE}
+age_plt <- num_attributes %>% 
+            ggplot(aes(x=age)) + 
+            geom_histogram(aes(y=after_stat(density)), binwidth=2, color="gray", fill="lightblue", alpha=0.5) +
+            geom_density(color="blue") +
+            labs(x="Age", y="Density", title="Customer's Age Distribution") + 
+            theme_minimal()
+```
+
+```{r, echo=FALSE}
+tenure_plt <- num_attributes %>% 
+            ggplot(aes(x=tenure)) + 
+            geom_histogram(aes(y=after_stat(density)), binwidth=1, color="gray", fill="lightblue", alpha=0.5) + 
+            geom_density(color="blue") +
+            labs(x="Tenure (years)", y="Density", title="Customer's Tenure Distribution") + 
+            theme_minimal()
+```
+
+```{r, echo=FALSE}
+balance_plt <- num_attributes %>% 
+            ggplot(aes(x=balance)) + 
+            geom_histogram(aes(y=after_stat(density)), binwidth=5000, color="gray", fill="lightblue", alpha=0.5) + 
+            geom_density(color="blue") +
+            labs(x="Balance", y="Density", title="Customer's Balance Distribution") + 
+            theme_minimal()
+```
+
+```{r, echo=FALSE}
+estimated_salary_plt <- num_attributes %>% 
+            ggplot(aes(x=estimated_salary)) + 
+            geom_histogram(aes(y=after_stat(density)), binwidth=5000, color="gray", fill="lightblue", alpha=0.5) + 
+            geom_density(color="blue") +
+            labs(x="Estimated Salary", y="Density", title="Customer's Estimated Salary Distribution") + 
+            theme_minimal()
+```
+
+```{r, echo=FALSE}
+satisfaction_score_plt <- num_attributes %>% 
+            ggplot(aes(x=satisfaction_score)) + 
+            geom_histogram(aes(y=after_stat(density)), color="gray", fill="lightblue", alpha=0.5) + 
+            geom_density(color="blue") +
+            labs(x="Satisfaction Score", y="Density", title="Customer's Satisfaction Score Distribution") + 
+            theme_minimal()
+```
+
+```{r, echo=FALSE}
+point_earned_plt <- num_attributes %>% 
+            ggplot(aes(x=point_earned)) + 
+            geom_histogram(aes(y=after_stat(density)), binwidth=10, color="gray", fill="lightblue", alpha=0.5) + 
+            geom_density(color="blue") +
+            labs(x="Points Earned", y="Density", title="Points Earned By Customers Distribution") + 
+            theme_minimal()
+```
+
+```{r, echo=FALSE}
+grid.arrange(credit_score_plt, age_plt, tenure_plt, balance_plt, estimated_salary_plt, satisfaction_score_plt, point_earned_plt, ncol=2, nrow=4)
+```
+
+## Categorical Attributes
+
+```{r, echo=FALSE}
+num_names <- names(num_attributes)
+cat_attributes <- df2 %>% 
+  select(-row_number, -customer_id, surname, -one_of(num_names))
+```
+
+```{r, echo=FALSE}
+gender_plt <- cat_attributes %>% 
+              ggplot(aes(x=gender)) +
+              geom_bar(aes(fill=gender)) +
+              labs(x="Gender", y="Quantity", title="Customers Gender") + 
+              theme_minimal()
+
+geography_plt <- cat_attributes %>% 
+                       ggplot(aes(x=geography)) +
+                       geom_bar(aes(fill=geography)) +
+                       labs(x="Geography", y="Quantity", title="Customers Localization") +
+                       theme_minimal()
+
+num_of_products_plt <- cat_attributes %>% 
+                   ggplot(aes(x=num_of_products)) +
+                   geom_bar(aes(fill=factor(num_of_products)), show.legend = FALSE) +
+                   labs(x="Number of Products", y="Quantity", title="Customer's Number of Products") + 
+                   theme_minimal()
+
+has_cr_card_plt <- cat_attributes %>% 
+                          ggplot(aes(x=has_cr_card)) +
+                          geom_bar(aes(fill=has_cr_card)) +
+                          labs(x="Has Credit Card", y="Quantity", title="Customers Credit Card") + 
+                          theme_minimal()
+
+is_active_member_plt <- cat_attributes %>% 
+                   ggplot(aes(x=is_active_member)) +
+                   geom_bar(aes(fill=is_active_member)) +
+                   labs(x="Active Member", y="Quantity", title="Customers Activitie") + 
+                   theme_minimal()
+
+exited_plt <- cat_attributes %>% 
+                   ggplot(aes(x=exited)) +
+                   geom_bar(aes(fill=exited)) +
+                   labs(x="Active Member", y="Quantity", title="Customers Activitie") + 
+                   theme_minimal()
+```
+
+```{r, echo=FALSE}
+grid.arrange(gender_plt, geography_plt, num_of_products_plt, has_cr_card_plt, is_active_member_plt, exited_plt, ncol=2, nrow=4)
+```

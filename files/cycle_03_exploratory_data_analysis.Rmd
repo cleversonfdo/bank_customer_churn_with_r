@@ -1,0 +1,406 @@
+---
+title: "Exploratory Data Analysis - Cycle 03"
+author: "Cleverson Oliveira"
+date: "`r format(Sys.time(), '%d/%m/%Y')`"
+output:
+  html_document:
+    highlight: textmate
+    logo: logo.png
+    theme: jou
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: no
+    df_print: paged
+    code_folding: hide
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Imports
+
+```{r imports}
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(gtsummary)
+library(kableExtra)
+library(summarytools)
+library(gridExtra)
+```
+
+# Data Collection
+
+You can also embed plots, for example:
+
+```{r collection, echo=FALSE}
+df3 <- readRDS("files/df2.rds")
+View(df3)
+glimpse(df3)
+```
+
+# Column Description
+
+```{r, echo=FALSE}
+variables <- df3 %>% names()
+description <- c(
+  "Corresponds to the record (row) number",
+  "Unique ID for the customer",
+  "The surname of a customer ",
+  "The credit score of the customer",
+  "Customer’s location",
+  "Customer's gender",
+  "Customer's age",
+  "Number of years that the customer has been a client ",
+  "Customer's balance",
+  "Number of products that a customer has purchased",
+  "Denotes whether or not a customer has a credit card",
+  "Denotes if the customer is active or not",
+  "Customer's salary",
+  "Whether or not the customer left the bank",
+  "Customer has complaint or not",
+  "Score provided by the customer for their complaint resolution",
+  "Type of card hold by the customer",
+  "The points earned by the customer for using credit card"
+)
+
+df_description <- tibble(variables = variables,
+                  description = description)
+
+kable(df_description, format = "html") %>% 
+kableExtra::kable_styling(bootstrap_options = "striped", full_width = FALSE)
+```
+
+# Hypothesis Validation
+
+### H1) Older customers are less likely to leave their bank than younger ones.
+
+```{r, echo=FALSE}
+# Boxplot
+age_boxplot <- df3 %>% 
+      ggplot(aes(x=exited, y=age)) + 
+      stat_boxplot(geom='errorbar', width=0.6) +
+      geom_boxplot(aes(fill=exited), show.legend = FALSE) + 
+      labs(title = "Age vs. Exited Comparison", y = "Age", x = "Exited") + 
+      theme_bw()
+age_boxplot
+ggsave("age_boxplot.jpg", plot = age_boxplot, width=4, height=6)
+
+# Hystogram
+age_plot <- df3 %>% 
+      ggplot(aes(x=age)) + 
+      geom_histogram(binwidth=1, color="gray", fill="navy") + 
+      facet_wrap(vars(exited), nrow=2, scales="free_y") +
+      labs(y="Number of Clients") +
+      ggtitle("Age Distribution")
+age_plot
+# To save a figure file
+ggsave("age_plot.jpg", plot = age_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+# Descriptive Statistics
+df3 %>% 
+  select(age, exited) %>% 
+  tbl_summary(by=exited) %>% 
+  add_p()
+```
+
+#### The median age of customers who left is 45 years old, while the median age of customers who didn't change their bank is 36 years old. So, the hyphotesis is FALSE.
+
+### H2) Women are more likely to leave their bank than men.
+
+```{r, echo=FALSE}
+gender_plot <- df3 %>% 
+  select(exited, gender) %>% 
+  ggplot(aes(x = exited)) +
+  geom_bar(aes(fill=gender), position = 'dodge') +
+  labs(title = "Gender vs. Exited", x = "Exited", y = "Number of customers") +
+    theme_bw()
+gender_plot
+ggsave("gender_plot.jpg", plot = gender_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+df3 %>% 
+  select(exited, gender) %>% 
+  tbl_summary(by = exited)
+```
+
+#### Of the customers who left their bank account, 56% were women and 44% were man. Therefore this hypothesis is TRUE.
+
+### H3) Customers with a higher credit score are less likely to leave the bank.
+
+```{r, echo=FALSE}
+# Hystogram
+credit_score_plot <- df3 %>% 
+      ggplot(aes(x=credit_score)) + 
+      geom_histogram(binwidth=10, color="gray", fill="navy") + 
+      facet_wrap(vars(exited), nrow=2, scales="free_y") +
+      labs(y="Number of Clients") +
+      ggtitle("Credit Score Distribution")
+credit_score_plot
+ggsave("credit_score_plot.jpg", plot = credit_score_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+df3 %>% 
+  select(exited, credit_score) %>% 
+  tbl_summary(by=exited) %>% 
+  add_p()
+```
+
+#### The credit score median of customers who left and didn't leave their bank account are almost the same. So, this hypothesis is FALSE.
+
+### H4) Customers living in Germany are less likely to abandon their bank account.
+
+```{r, echo=FALSE}
+geography_plot <- df3 %>% 
+  select(exited, geography) %>% 
+  ggplot(aes(x = exited)) +
+  # bar chart for categorical label
+  geom_bar(aes(fill = geography), position = 'dodge') +
+labs(title = "Geograph vs. Exited", x = "exited", y = "Number of customers") +
+    theme_bw()
+geography_plot
+ggsave("geography_plot.jpg", plot = geography_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+df3 %>% 
+  select(exited, geography) %>% 
+  tbl_summary(by=exited) %>% 
+  add_p()
+```
+
+#### From France and Spain, around 16% of the customers left their bank account. From Germany 32% of the customers left their bank account. In conclusion, this hyphotesis is FALSE.
+
+### H5) Older clients are more loyal and less likely to leave the bank.
+
+```{r, echo=FALSE}
+tenure_plot <- df3 %>% 
+      ggplot(aes(x=tenure)) + 
+      geom_histogram(color="gray", fill="navy") + 
+      facet_wrap(vars(exited), nrow=2, scales="free_y") +
+      labs(y="Number of Clients") +
+      ggtitle("Tenure Distribution")
+tenure_plot
+ggsave("tenure_plot.jpg", plot = tenure_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+df3 %>% 
+  select(exited, tenure) %>% 
+  tbl_summary(by=exited) %>% 
+  add_p()
+```
+
+#### The tenure median is almost the same for both clients who have or have not left the bank. The hypothesis is FALSE.
+
+### H6) People with a higher balance in their accounts are less likely to leave the bank.
+
+```{r, echo=FALSE}
+# Boxplot
+balance_boxplot <- df3 %>% 
+      ggplot(aes(x=exited, y=balance)) + 
+      stat_boxplot(geom='errorbar', width=0.6) +
+      geom_boxplot(aes(fill=exited), show.legend = FALSE) + 
+      labs(title = "Balance vs. Exited Comparison", y = "Balance", x = "Exited") + 
+      theme_bw()
+balance_boxplot
+ggsave("balance_boxplot.jpg", plot = balance_boxplot, width=4, height=6)
+
+# Hystogram
+balance_plot <- df3 %>% 
+  ggplot(aes(x=balance)) + 
+  geom_histogram(binwidth=10000, color="gray", fill="navy") + 
+  facet_wrap(vars(exited), nrow=2, scales="free_y") +
+  labs(y="Number of Clients") +
+  ggtitle("Balance Distribution")
+balance_plot
+# To save a figure file
+ggsave("balance_plot.jpg", plot = balance_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+df3 %>% 
+  filter(balance > 0) %>% 
+  select(exited, balance) %>% 
+  tbl_summary(by=exited) %>% 
+  add_p()
+```
+
+#### Considering balance above 0, the median balances of customer who did or did not leave the bank are the same. The hypothesis is FALSE.
+
+### H7) People with a credit card are less likely to leave the bank
+
+```{r, echo=FALSE}
+
+has_cr_card_plot <- df3 %>% 
+  select(exited, has_cr_card) %>% 
+  ggplot(aes(x = exited)) +
+  # bar chart for categorical label
+  geom_bar(aes(fill = has_cr_card), position = 'dodge') +
+labs(title = "Has Credit Card vs. Exited", x = "Exited", y = "Number of customers") +
+    theme_bw()
+has_cr_card_plot
+ggsave("has_cr_card_plot.jpg", plot = has_cr_card_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+df3 %>% 
+  select(exited, has_cr_card) %>% 
+  tbl_summary(by=exited) %>% 
+  add_p()
+```
+
+#### The number of customers who did not leave the bank and have a credit card is greater than the customers who left the bank. The hypothesis is TRUE.
+
+### H8) Active customers are less likely to leave the bank
+
+```{r, echo=FALSE}
+
+is_active_member_plot <- df3 %>% 
+  select(exited, is_active_member) %>% 
+  ggplot(aes(x = exited)) +
+  # bar chart for categorical label
+  geom_bar(aes(fill = is_active_member), position = 'dodge') +
+labs(title = "Is Active Member vs. Exited", x = "Exited", y = "Number of customers") +
+    theme_bw()
+is_active_member_plot
+ggsave("is_active_member_plot.jpg", plot = is_active_member_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+df3 %>% 
+  select(exited, is_active_member) %>% 
+  tbl_summary(by=exited) %>% 
+  add_p()
+```
+
+#### The number of active customers who did not leave the bank is greater than the customers who left the bank. The hypothesis is TRUE.
+
+### H9) People with lower salaries are more likely to leave the bank
+
+```{r, echo=FALSE}
+# Boxplot
+estimated_salary_boxplot <- df3 %>% 
+      ggplot(aes(x=exited, y=estimated_salary)) + 
+      stat_boxplot(geom='errorbar', width=0.6) +
+      geom_boxplot(aes(fill=exited), show.legend = FALSE) + 
+      labs(title = "Estimated Salary vs. Exited Comparison", y = "Salary", x = "Exited") + 
+      theme_bw()
+estimated_salary_boxplot
+ggsave("estimated_salary_boxplot.jpg", plot = estimated_salary_boxplot, width=4, height=6)
+
+# Hystogram
+estimated_salary_plot <- df3 %>% 
+  ggplot(aes(x=estimated_salary)) + 
+  geom_histogram(binwidth=1000, color="gray", fill="navy") + 
+  facet_wrap(vars(exited), nrow=2, scales="free_y") +
+  labs(y="Number of Clients") +
+  ggtitle("Estimated Salary Distribution")
+estimated_salary_plot
+# To save a figure file
+ggsave("estimated_salary_plot.jpg", plot = estimated_salary_plot, width=4, height=6)
+```
+
+```{r, echo=FALSE}
+df3 %>% 
+  select(exited, estimated_salary) %>% 
+  tbl_summary(by=exited) %>% 
+  add_p()
+```
+
+#### The Estimated Salary Median of customers who did leave the bank is almost the same that customers who did not leave the bank. The hypothesis is FALSE.
+
+### Hypothesis Conclusion
+
+```{r, echo=FALSE}
+Hypothesis <- c(
+  "H1) Older customers are less likely to leave their bank than younger ones.",
+  "H2) Women are more likely to leave their bank than men.",
+  "H3) Customers with a higher credit score are less likely to leave the bank.",
+  "H4) Customers living in Germany are less likely to abandon their bank account.",
+"H5) Older clients are more loyal and less likely to leave the bank.",
+"H6) People with a higher balance in their accounts are less likely to leave the bank.",
+"H7) People with a credit card are less likely to leave the bank.",
+"H8) Active customers are less likely to leave the bank",
+"H9) People with lower salaries are more likely to leave the bank"
+)
+
+Conclusion <- c(
+              "False",
+              "True",
+              "False",
+              "True",
+              "False",
+              "False",
+              "True",
+              "True",
+              "False"
+              )
+
+Relevance <- c(
+              "High",
+              "Medium",
+              "High",
+              "Low",
+              "Medium",
+              "High",
+              "Medium",
+              "High",
+              "Medium"
+              )
+
+hypothesis_table <- 
+  tibble(Hypothesis, Conclusion, Relevance)
+
+kable(hypothesis_table, format = "html") %>% 
+  kableExtra::kable_styling(bootstrap_options = "striped",
+                            full_width = FALSE)
+```
+
+# Multivariable Analysis
+
+### Correlation Matrix
+
+```{r, echo=FALSE}
+correlation_matrix <- df3 %>% 
+  select(credit_score, age, tenure, balance, num_of_products, estimated_salary, point_earned) %>% 
+  cor() %>% 
+  round(3)
+```
+
+### Visualization
+
+```{r, echo=FALSE}
+library(reshape2)
+
+melted_correlation <- melt(correlation_matrix)
+
+matrix_correlation_plot <- 
+    ggplot(melted_correlation, aes(x = Var1, y = Var2, fill = value)) +
+    geom_tile() + 
+    geom_text(aes(Var1, Var2, label = value)) + 
+    scale_fill_gradient2(low = "blue", high = "red", limit = c(-1,1), name = "Correlation") +
+    theme(axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          panel.background = element_blank())
+
+matrix_correlation_plot
+
+ggsave("matrix_correlation_plot.jpg", matrix_correlation_plot, width = 8, height = 4)
+```
+
+#### There is no high correlation between numerical variables
+
+```{r, echo=FALSE}
+#Saving df3
+saveRDS(df3, "df3.rds")
+```
