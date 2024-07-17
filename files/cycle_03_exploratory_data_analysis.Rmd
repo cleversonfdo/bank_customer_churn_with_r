@@ -39,7 +39,7 @@ library(gridExtra)
 You can also embed plots, for example:
 
 ```{r collection, echo=FALSE}
-df3 <- readRDS("files/df2.rds")
+df3 <- readRDS("df2.rds")
 View(df3)
 glimpse(df3)
 ```

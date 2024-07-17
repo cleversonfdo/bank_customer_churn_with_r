@@ -96,16 +96,11 @@ df2 <-  janitor::clean_names(df2, case = "snake") %>% # change the font
                 
               ) %>% 
                               # categorical data
-        mutate_if(is.character, as.factor) 
-# checking the levels
-table(df2$response)
-table(df2$previously_insured)
-  
-        # Make sure yes is the first level of factor response
-df2 <- df2 %>%  mutate( has_cr_card = factor(has_cr_card, levels=c("yes", "no")),
-                        is_active_member = factor(is_active_member, levels=c("yes", "no")),
-                        exited = factor(exited, levels=c("yes", "no")),
-                        complain = factor(complain, levels=c("yes", "no"))
+        mutate_if(is.character, as.factor) %>% 
+        mutate( has_cr_card = factor(has_cr_card, levels=c("yes", "no")),
+                is_active_member = factor(is_active_member, levels=c("yes", "no")),
+                exited = factor(exited, levels=c("yes", "no")),
+                complain = factor(complain, levels=c("yes", "no"))
               )
 # checking the change of levels
 table(df2$response)
@@ -115,7 +110,7 @@ df2 %>% names()
 
 glimpse(df2)
 
-saveRDS(df2, "files/df2.rds")
+saveRDS(df2, "df2.rds")
 ```
 
 ## Data Types

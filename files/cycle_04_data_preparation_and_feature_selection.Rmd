@@ -74,26 +74,31 @@ glimpse(df4)
 ```{r, echo=FALSE}
 variables <- df4 %>% names()
 description <- c(
+  "Corresponds to the record (row) number",
   "Unique ID for the customer",
-  "Gender of the customer",
-  "Age of the customer",
-  "Customer has DL (yes/no)",
-  "Unique code for the region of the customer",
-  "Customer already has Vehicle Insurance (yes/no)",
-  "Age of the Vehicle",
-  "Customer got his/her vehicle damaged in the past (yes/no)",
-  "The amount customer needs to pay as premium in the year",
-  "Anonymized Code for the channel of outreaching to the customer ie. Different Agents, Over Mail, Over Phone, In Person, etc.",
-  "Number of Days, Customer has been associated with the company",
-  "Customer is interested in car insurance (yes/no)"
+  "The surname of a customer ",
+  "The credit score of the customer",
+  "Customer’s location",
+  "Customer's gender",
+  "Customer's age",
+  "Number of years that the customer has been a client ",
+  "Customer's balance",
+  "Number of products that a customer has purchased",
+  "Denotes whether or not a customer has a credit card",
+  "Denotes if the customer is active or not",
+  "Customer's salary",
+  "Whether or not the customer left the bank",
+  "Customer has complaint or not",
+  "Score provided by the customer for their complaint resolution",
+  "Type of card hold by the customer",
+  "The points earned by the customer for using credit card"
 )
 
 df_description <- tibble(variables = variables,
-       description = description)
+                  description = description)
 
 kable(df_description, format = "html") %>% 
-  kableExtra::kable_styling(bootstrap_options = "striped",
-                            full_width = FALSE)
+kableExtra::kable_styling(bootstrap_options = "striped", full_width = FALSE)
 ```
 
 # Data Preparation
@@ -106,29 +111,31 @@ Target encoding for gender e region_code
 
 ```{r, echo=FALSE}
 gender_encoder <- df4 %>% 
-  mutate(response_num = ifelse(response == "yes", 1, 0)) %>%
+  mutate(exited_num = ifelse(exited == "yes", 1, 0)) %>%
   group_by(gender) %>% 
-  summarise(gender_num = mean(response_num, na.rm = TRUE))
+  summarise(gender_num = mean(exited_num, na.rm = TRUE))
 
-region_encoder <- df4 %>% 
-  mutate(response_num = ifelse(response == "yes", 1, 0)) %>%
-  group_by(region_code) %>% 
-  summarise(region_num = mean(response_num, na.rm = TRUE))
+geography_encoder <- df4 %>% 
+  mutate(exited_num = ifelse(exited == "yes", 1, 0)) %>%
+  group_by(geography) %>% 
+  summarise(geography_num = mean(exited_num, na.rm = TRUE))
 
 # save in RDS
 saveRDS(gender_encoder, "gender_encoder.rds")
-saveRDS(region_encoder, "region_encoder.rds")
+saveRDS(geography_encoder, "geography_encoder.rds")
 ```
 
-## Frequency encoding
+## Ordinal Encoding
 
-```{r, echo=FALSE}
-policy_encoder <- df4 %>% 
-  group_by(policy_sales_channel) %>% 
-  # divide each category by the number of rows
-  summarise(policy_num = n()/nrow(df4))
+```{r}
+encoding <- c("diamond" = 1, "gold" = 2, "silver" = 3, "platinum" = 4)
 
-saveRDS(policy_encoder, "policy_encoder.rds")
+card_type_encoder <- df4 %>% 
+  #group_by(card_type) %>% 
+  distinct(card_type) %>% 
+  mutate(card_type_num = encoding[match(card_type, names(encoding))])
+
+saveRDS(card_type_encoder, "card_type_encoder.rds")
 ```
 
 ### Building Encoder Function
@@ -141,13 +148,13 @@ encoder_function <- function(df){
   select(-gender) %>% 
   rename(gender = gender_num) %>% #View()
     
-  left_join(region_encoder) %>% 
-  select(-region_code) %>% 
-  rename(region_code = region_num) %>% #View()
-    
-  left_join(policy_encoder) %>% 
-  select(-policy_sales_channel) %>% 
-  rename(policy_sales_channel = policy_num) #View()
+  left_join(geography_encoder) %>% 
+  select(-geography) %>% 
+  rename(geography = geography_num) %>% #View()
+
+  left_join(card_type_encoder) %>% 
+  select(-card_type) %>% 
+  rename(card_type = card_type_num) #View()
 } 
 ```
 
@@ -160,13 +167,14 @@ saveRDS(encoder_function, "encoder_function.rds")
 ```{r, echo=FALSE}
 #encoder_function <- readRDS("encoder_function.rds")
 df_preprocessed <- encoder_function(df4)
+df_preprocessed <- df_preprocessed[, !names(df_preprocessed) %in% c("surname", "row_number")]
 ```
 
 ```{r, echo=FALSE}
 set.seed(123)
 
 df_split <- df_preprocessed %>% 
-  initial_split(prop = 0.75, strata = response)
+  initial_split(prop = 0.75, strata = exited)
 
 df_train <- df_split %>% 
   training()
@@ -179,21 +187,21 @@ df_test <- df_split %>%
 
 ```{r, echo=FALSE}
 df_train %>% 
-  select(response) %>% 
-  tbl_summary(type = list(response ~ "categorical"))
+  select(exited) %>% 
+  tbl_summary(type = list(exited ~ "categorical"))
 
 df_test %>% 
-  select(response) %>% 
-  tbl_summary(type = list(response ~ "categorical"))
+  select(exited) %>% 
+  tbl_summary(type = list(exited ~ "categorical"))
 ```
 
 ### Using tidymodels steps to continue the preprocessing
 
 ```{r, echo=FALSE}
-df_recipe <- recipe(response ~.,
+df_recipe <- recipe(exited ~.,
        data = df_train) %>% 
-  step_normalize(age, days_associated) %>% 
-  step_scale(health_annual_paid) %>% 
+  step_normalize(age, credit_score, point_earned) %>% 
+  step_scale(estimated_salary, balance) %>% 
   step_dummy(all_nominal(), -all_outcomes())
 ```
 
@@ -202,26 +210,25 @@ df_recipe <- recipe(response ~.,
 ```{r, echo=FALSE}
 df_train_prep <- df_recipe %>% 
   prep(df_train)
-  #prep(training = df_train)
 
 df_train_processed <- df_train_prep %>% 
   bake(df_train)
-  #bake(new_data = df_train)
+
+df4 <- df_train_prep %>% bake(df4)
 ```
 
 ```{r, echo=FALSE}
 df_test_processed <- df_train_prep %>% 
   bake(df_test)
-  #bake(new_data = df_test)
 ```
 
 # Feature Selection
 
 ```{r, echo=FALSE}
 predictors <- df_train_processed %>% 
-  select(-id, -response)
+  select(-customer_id, -exited)
 
-target <- df_train_processed$response
+target <- df_train_processed$exited
 ```
 
 ```{r, echo=FALSE}
@@ -244,32 +251,36 @@ importance(rf_model) %>% View()
 varImpPlot(rf_model)
 ```
 
-In this first cycle we are going to select the seven most important variables according to the mean decrease gini
+In this first cycle we are going to select the ten most important variables according to the mean decrease gini
 
 ```{r, echo=FALSE}
 importance(rf_model) %>% 
   as_tibble(rownames = "rowname") %>% 
   arrange(desc(MeanDecreaseGini)) %>%  # arrange the importance
   select(rowname) %>%  # select the names of columns
-  slice(1:7) %>%  # get only the first seven
+  slice(1:10) %>%  # get only the first seven
   pull()
 ```
 
 ```{r, echo=FALSE}
 #Final dataset
-#selected_columns <- c(
-#  "age",
-#  "vehicle_damage",
-#  "days_associated",
-#  "previously_insured",
-#  "health_annual_paid",
-#  "policy_sales_channel",
-#  "region_code",
-#  "response"
-#)
-#
-#df_selected <- df4 %>% 
-#  select(all_of(selected_columns))
+selected_columns <- c(
+  "customer_id",
+  "complain_no",
+  "age",
+  "num_of_products",
+  "balance",
+  "geography",
+  "is_active_member_no",
+  "credit_score",
+  "estimated_salary",
+  "point_earned",
+  "tenure",
+  "exited"
+)
+
+df4 <- df4 %>% 
+  select(all_of(selected_columns))
 
 saveRDS(df4, "df4.rds")
 ```
